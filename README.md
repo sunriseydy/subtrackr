@@ -360,6 +360,8 @@ curl -H "X-API-Key: sk_your_api_key_here" https://your-domain.com/api/v1/subscri
 | PUT | `/api/v1/subscriptions/:id` | Update subscription |
 | DELETE | `/api/v1/subscriptions/:id` | Delete subscription |
 
+The `autopay` field is nullable: `true` means payments are automatic, `false` means manual payment is required, and `null` means the payment mode has not been recorded.
+
 #### Statistics & Export
 
 | Method | Endpoint | Description |

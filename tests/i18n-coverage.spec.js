@@ -31,9 +31,9 @@ const pages = [
   {
     path: '/subscriptions',
     expect: {
-      es: ['Suscripciones', 'Añadir suscripción', 'Nombre', 'Categoría', 'Coste'],
-      de: ['Abonnements', 'Abonnement hinzufügen', 'Name', 'Kategorie', 'Kosten'],
-      nl: ['Abonnementen', 'Abonnement toevoegen', 'Naam', 'Categorie', 'Kosten'],
+      es: ['Suscripciones', 'Añadir suscripción', 'Buscar suscripciones...', 'Autopago', 'Nombre', 'Categoría', 'Coste'],
+      de: ['Abonnements', 'Abonnement hinzufügen', 'Abonnements durchsuchen...', 'Automatisch', 'Name', 'Kategorie', 'Kosten'],
+      nl: ['Abonnementen', 'Abonnement toevoegen', 'Abonnementen zoeken...', 'Automatisch', 'Naam', 'Categorie', 'Kosten'],
     },
     forbid: {
       es: ['Add Subscription', 'Renewal Date'],
@@ -44,9 +44,9 @@ const pages = [
   {
     path: '/form/subscription',
     expect: {
-      es: ['Añadir suscripción', 'Nombre', 'Etiqueta', 'Etiquetas', 'Compartido con', 'Frecuencia', 'Coste', 'Notas'],
-      de: ['Abonnement hinzufügen', 'Name', 'Etikett', 'Tags', 'Geteilt mit', 'Frequenz', 'Kosten', 'Notizen'],
-      nl: ['Abonnement toevoegen', 'Naam', 'Label', 'Tags', 'Gedeeld met', 'Frequentie', 'Kosten', 'Notities'],
+      es: ['Añadir suscripción', 'Nombre', 'Etiqueta', 'Etiquetas', 'Compartido con', 'Frecuencia', 'Coste', 'Pago automático', 'Notas'],
+      de: ['Abonnement hinzufügen', 'Name', 'Etikett', 'Tags', 'Geteilt mit', 'Frequenz', 'Kosten', 'Automatische Zahlung', 'Notizen'],
+      nl: ['Abonnement toevoegen', 'Naam', 'Label', 'Tags', 'Gedeeld met', 'Frequentie', 'Kosten', 'Automatische betaling', 'Notities'],
     },
     forbid: {
       es: ['Add Subscription', 'Shared with', 'Schedule *', 'Notes</label>'],
@@ -83,9 +83,9 @@ const pages = [
   {
     path: '/calendar',
     expect: {
-      es: ['Suscribirse'],
-      de: ['Abonnieren'],
-      nl: ['Abonneren'],
+      es: ['Hoy'],
+      de: ['Heute'],
+      nl: ['Vandaag'],
     },
     forbid: {
       es: [],
@@ -96,14 +96,48 @@ const pages = [
 ];
 
 const languages = ['es', 'de', 'nl'];
+let seededSubscriptionID = null;
+let seededCategoryID = null;
+
+// Language is a global application setting, so these checks must not race each other.
+test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async ({ request }) => {
-  // Reset to English before suite runs so leftover state doesn't pollute
   await request.post('/api/settings/language', { data: { lang: 'en' } });
+
+  let categories = await (await request.get('/api/categories')).json();
+  if (categories.length === 0) {
+    const categoryResponse = await request.post('/api/categories', {
+      data: { name: `i18n Coverage ${Date.now()}` },
+    });
+    expect(categoryResponse.ok()).toBeTruthy();
+    const category = await categoryResponse.json();
+    seededCategoryID = category.id;
+    categories = [category];
+  }
+
+  const subscriptionResponse = await request.post('/api/subscriptions', {
+    form: {
+      name: `i18n Coverage ${Date.now()}`,
+      cost: '1.00',
+      schedule: 'Monthly',
+      status: 'Active',
+      original_currency: 'USD',
+      category_id: String(categories[0].id),
+      autopay: 'true',
+    },
+  });
+  expect(subscriptionResponse.ok()).toBeTruthy();
+  seededSubscriptionID = (await subscriptionResponse.json()).id;
 });
 
 test.afterAll(async ({ request }) => {
-  // Always restore English so the dev DB doesn't end up in a non-English state
+  if (seededSubscriptionID !== null) {
+    await request.delete(`/api/subscriptions/${seededSubscriptionID}`);
+  }
+  if (seededCategoryID !== null) {
+    await request.delete(`/api/categories/${seededCategoryID}`);
+  }
   await request.post('/api/settings/language', { data: { lang: 'en' } });
 });
 

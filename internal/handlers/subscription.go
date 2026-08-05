@@ -191,6 +191,27 @@ func parseShareCount(s string) int {
 	return v
 }
 
+func lastPostedBool(c *gin.Context, name string) (bool, bool) {
+	values := c.PostFormArray(name)
+	if len(values) == 0 {
+		return false, false
+	}
+	return values[len(values)-1] == "true", true
+}
+
+func postedAutopay(c *gin.Context) (*bool, bool) {
+	known, knownPosted := lastPostedBool(c, "autopay_known")
+	if knownPosted && !known {
+		return nil, false
+	}
+
+	value, posted := lastPostedBool(c, "autopay")
+	if !posted {
+		return nil, false
+	}
+	return &value, true
+}
+
 // parseDatePtr parses a date string in "2006-01-02" format and returns a pointer to time.Time.
 // Returns nil if the string is empty or if parsing fails.
 // Logs parsing errors for debugging purposes.
@@ -548,37 +569,37 @@ func (h *SubscriptionHandler) Settings(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "settings.html", gin.H{
-		"Title":                    "Settings",
-		"CurrentPage":              "settings",
-		"Currency":                 h.settingsService.GetCurrency(),
-		"CurrencySymbol":           h.settingsService.GetCurrencySymbol(),
-		"RenewalReminders":         h.settingsService.GetBoolSettingWithDefault("renewal_reminders", false),
-		"HighCostAlerts":           h.settingsService.GetBoolSettingWithDefault("high_cost_alerts", true),
-		"PushoverConfig":           pushoverConfig,
-		"PushoverConfigured":       pushoverConfigured,
-		"HighCostThreshold":        h.settingsService.GetFloatSettingWithDefault("high_cost_threshold", 50.0),
+		"Title":                        "Settings",
+		"CurrentPage":                  "settings",
+		"Currency":                     h.settingsService.GetCurrency(),
+		"CurrencySymbol":               h.settingsService.GetCurrencySymbol(),
+		"RenewalReminders":             h.settingsService.GetBoolSettingWithDefault("renewal_reminders", false),
+		"HighCostAlerts":               h.settingsService.GetBoolSettingWithDefault("high_cost_alerts", true),
+		"PushoverConfig":               pushoverConfig,
+		"PushoverConfigured":           pushoverConfigured,
+		"HighCostThreshold":            h.settingsService.GetFloatSettingWithDefault("high_cost_threshold", 50.0),
 		"ReminderDays":                 h.settingsService.GetIntSettingWithDefault("reminder_days", 7),
 		"ReminderDaysList":             h.settingsService.GetStringSettingWithDefault("reminder_days_list", ""),
 		"CancellationReminders":        h.settingsService.GetBoolSettingWithDefault("cancellation_reminders", false),
 		"CancellationReminderDays":     h.settingsService.GetIntSettingWithDefault("cancellation_reminder_days", 7),
 		"CancellationReminderDaysList": h.settingsService.GetStringSettingWithDefault("cancellation_reminder_days_list", ""),
-		"DarkMode":                 h.settingsService.IsDarkModeEnabled(),
-		"Version":                  version.GetVersion(),
-		"SMTPConfig":               smtpConfig,
-		"SMTPConfigured":           smtpConfigured,
-		"AuthEnabled":              authEnabled,
-		"AuthUsername":             authUsername,
-		"ICalSubscriptionEnabled":  icalSubscriptionEnabled,
-		"ICalSubscriptionURL":      icalSubscriptionURL,
-		"BaseURL":                  h.settingsService.GetBaseURL(),
-		"Currencies":               service.GetAvailableCurrencies(),
-		"DateFormat":               h.settingsService.GetDateFormat(),
-		"WebhookConfig":            webhookConfig,
-		"WebhookConfigured":        webhookConfigured,
-		"TelegramConfig":           telegramConfig,
-		"TelegramConfigured":       telegramConfigured,
-		"Lang":                     h.activeLang(),
-		"Languages":                h.i18nCatalog.AvailableLanguages(),
+		"DarkMode":                     h.settingsService.IsDarkModeEnabled(),
+		"Version":                      version.GetVersion(),
+		"SMTPConfig":                   smtpConfig,
+		"SMTPConfigured":               smtpConfigured,
+		"AuthEnabled":                  authEnabled,
+		"AuthUsername":                 authUsername,
+		"ICalSubscriptionEnabled":      icalSubscriptionEnabled,
+		"ICalSubscriptionURL":          icalSubscriptionURL,
+		"BaseURL":                      h.settingsService.GetBaseURL(),
+		"Currencies":                   service.GetAvailableCurrencies(),
+		"DateFormat":                   h.settingsService.GetDateFormat(),
+		"WebhookConfig":                webhookConfig,
+		"WebhookConfigured":            webhookConfigured,
+		"TelegramConfig":               telegramConfig,
+		"TelegramConfigured":           telegramConfigured,
+		"Lang":                         h.activeLang(),
+		"Languages":                    h.i18nCatalog.AvailableLanguages(),
 	})
 }
 
@@ -650,13 +671,13 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	subscription.Usage = c.PostForm("usage")
 
 	// Default reminders to enabled unless explicitly set to false.
-	// The form submits a hidden "false" before the checkbox's "true", so use
-	// the last value (Gin's PostForm returns the first, which is always "false").
-	reminderVals := c.PostFormArray("reminder_enabled")
-	if len(reminderVals) == 0 {
-		subscription.ReminderEnabled = true
+	if reminderEnabled, posted := lastPostedBool(c, "reminder_enabled"); posted {
+		subscription.ReminderEnabled = reminderEnabled
 	} else {
-		subscription.ReminderEnabled = reminderVals[len(reminderVals)-1] == "true"
+		subscription.ReminderEnabled = true
+	}
+	if autopay, posted := postedAutopay(c); posted {
+		subscription.Autopay = autopay
 	}
 
 	// Parse cost
@@ -860,10 +881,11 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	if val, ok := c.GetPostForm("usage"); ok {
 		existing.Usage = val
 	}
-	// The form submits a hidden "false" before the checkbox's "true", so use
-	// the last value (Gin's GetPostForm returns the first, which is always "false").
-	if vals := c.PostFormArray("reminder_enabled"); len(vals) > 0 {
-		existing.ReminderEnabled = vals[len(vals)-1] == "true"
+	if reminderEnabled, posted := lastPostedBool(c, "reminder_enabled"); posted {
+		existing.ReminderEnabled = reminderEnabled
+	}
+	if autopay, posted := postedAutopay(c); posted {
+		existing.Autopay = autopay
 	}
 	if val, ok := c.GetPostForm("cost"); ok && val != "" {
 		if cost, err := strconv.ParseFloat(val, 64); err == nil {
@@ -1023,7 +1045,7 @@ func (h *SubscriptionHandler) ExportCSV(c *gin.Context) {
 	defer writer.Flush()
 
 	// Write CSV header
-	header := []string{"ID", "Name", "Category", "Cost", "Currency", "Schedule", "Schedule Interval", "Status", "Payment Method", "Account", "Start Date", "Renewal Date", "Cancellation Date", "URL", "Notes", "Usage", "Created At"}
+	header := []string{"ID", "Name", "Category", "Cost", "Currency", "Schedule", "Schedule Interval", "Status", "Payment Method", "Autopay", "Account", "Start Date", "Renewal Date", "Cancellation Date", "URL", "Notes", "Usage", "Created At"}
 	writer.Write(header)
 
 	// Write subscription data
@@ -1036,6 +1058,10 @@ func (h *SubscriptionHandler) ExportCSV(c *gin.Context) {
 		if currency == "" {
 			currency = h.settingsService.GetCurrency()
 		}
+		autopay := "unknown"
+		if sub.Autopay != nil {
+			autopay = strconv.FormatBool(*sub.Autopay)
+		}
 		record := []string{
 			fmt.Sprintf("%d", sub.ID),
 			sub.Name,
@@ -1046,6 +1072,7 @@ func (h *SubscriptionHandler) ExportCSV(c *gin.Context) {
 			fmt.Sprintf("%d", sub.ScheduleInterval),
 			sub.Status,
 			sub.PaymentMethod,
+			autopay,
 			sub.Account,
 			formatDate(sub.StartDate),
 			formatDate(sub.RenewalDate),

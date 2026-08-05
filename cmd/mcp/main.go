@@ -73,18 +73,19 @@ func main() {
 
 	// create_subscription
 	type CreateInput struct {
-		Name             string `json:"name" jsonschema:"required,the subscription name"`
+		Name             string  `json:"name" jsonschema:"required,the subscription name"`
 		Cost             float64 `json:"cost" jsonschema:"required,the subscription cost"`
-		Schedule         string `json:"schedule" jsonschema:"required,billing schedule: Monthly, Annual, Weekly, Daily, or Quarterly"`
-		Status           string `json:"status" jsonschema:"subscription status: Active, Cancelled, Paused, or Trial"`
-		OriginalCurrency string `json:"original_currency" jsonschema:"currency code e.g. USD, EUR"`
-		PaymentMethod    string `json:"payment_method" jsonschema:"payment method"`
-		Account          string `json:"account" jsonschema:"account identifier"`
-		URL              string `json:"url" jsonschema:"subscription URL"`
-		Notes            string `json:"notes" jsonschema:"additional notes"`
-		StartDate        string `json:"start_date" jsonschema:"start date in YYYY-MM-DD format"`
-		RenewalDate      string `json:"renewal_date" jsonschema:"renewal date in YYYY-MM-DD format"`
-		CategoryID       uint   `json:"category_id" jsonschema:"category ID"`
+		Schedule         string  `json:"schedule" jsonschema:"required,billing schedule: Monthly, Annual, Weekly, Daily, or Quarterly"`
+		Status           string  `json:"status" jsonschema:"subscription status: Active, Cancelled, Paused, or Trial"`
+		OriginalCurrency string  `json:"original_currency" jsonschema:"currency code e.g. USD, EUR"`
+		PaymentMethod    string  `json:"payment_method" jsonschema:"payment method"`
+		Autopay          *bool   `json:"autopay" jsonschema:"whether payment is charged automatically; omit when unknown"`
+		Account          string  `json:"account" jsonschema:"account identifier"`
+		URL              string  `json:"url" jsonschema:"subscription URL"`
+		Notes            string  `json:"notes" jsonschema:"additional notes"`
+		StartDate        string  `json:"start_date" jsonschema:"start date in YYYY-MM-DD format"`
+		RenewalDate      string  `json:"renewal_date" jsonschema:"renewal date in YYYY-MM-DD format"`
+		CategoryID       uint    `json:"category_id" jsonschema:"category ID"`
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_subscription",
@@ -97,6 +98,7 @@ func main() {
 			Status:           input.Status,
 			OriginalCurrency: input.OriginalCurrency,
 			PaymentMethod:    input.PaymentMethod,
+			Autopay:          input.Autopay,
 			Account:          input.Account,
 			URL:              input.URL,
 			Notes:            input.Notes,
@@ -134,6 +136,7 @@ func main() {
 		Status           string  `json:"status" jsonschema:"new status: Active, Cancelled, Paused, or Trial"`
 		OriginalCurrency string  `json:"original_currency" jsonschema:"new currency code"`
 		PaymentMethod    string  `json:"payment_method" jsonschema:"new payment method"`
+		Autopay          *bool   `json:"autopay" jsonschema:"new autopay state; null means unknown"`
 		Account          string  `json:"account" jsonschema:"new account"`
 		URL              string  `json:"url" jsonschema:"new URL"`
 		Notes            string  `json:"notes" jsonschema:"new notes"`
@@ -172,6 +175,9 @@ func main() {
 		}
 		if _, ok := provided["payment_method"]; ok {
 			existing.PaymentMethod = input.PaymentMethod
+		}
+		if _, ok := provided["autopay"]; ok {
+			existing.Autopay = input.Autopay
 		}
 		if _, ok := provided["account"]; ok {
 			existing.Account = input.Account
