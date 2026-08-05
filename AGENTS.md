@@ -207,9 +207,10 @@ This project uses versioned branches for releases. See `CLAUDE.md` for the compl
 4. Run code review agent before committing
 5. Commit, push, create PR: `gh pr create`
 6. Comment on GitHub issues: `gh issue comment`
-7. Monitor CI: `gh run watch`
-8. Merge PR: `gh pr merge --merge --delete-branch`
-9. Publish release: `gh release edit vX.Y.Z --draft=false`
+7. Monitor PR CI: `gh run watch`
+8. Merge PR and pin the updated `main` SHA as `RELEASE_SHA`
+9. Verify the main Docker build for `--commit "$RELEASE_SHA"`
+10. Publish at the verified commit: `gh release edit vX.Y.Z --target "$RELEASE_SHA" --draft=false`
 
 ### Common Tasks
 
