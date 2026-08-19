@@ -69,7 +69,7 @@ Themes persist across all pages and are saved per user. Change themes anytime fr
 
 ## 🚀 Quick Start
 
-SubTrackr is available as a multi-platform Docker image supporting both AMD64 and ARM64 architectures (including Apple Silicon).
+SubTrackr is available as a multi-platform Docker image supporting AMD64, ARM64 (including Apple Silicon), and ARMv7 architectures.
 
 **Note:** SubTrackr works fully out-of-the-box with no external dependencies. The Fixer.io API key is completely optional for currency conversion features.
 
