@@ -76,7 +76,7 @@ jobs:
           exit 1
 
       - name: Verify root endpoint
-        run: curl -fsSI http://127.0.0.1:18080/
+        run: curl -fsS http://127.0.0.1:18080/ > /dev/null
 
       - name: Show container logs on failure
         if: failure()
