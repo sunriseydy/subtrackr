@@ -268,6 +268,7 @@
         const year = parseInt({{.Year}}) || new Date().getFullYear();
         const month = parseInt({{.Month}}) || new Date().getMonth() + 1;
         const currencySymbol = "{{.CurrencySymbol}}";
+        const cancelByLabel = "{{t .Lang "calendar.cancel_by"}}";
         
         console.log('Calendar initialized:', { year, month, eventsCount: Object.keys(eventsByDate).length });
         
@@ -321,16 +322,25 @@
                         }
                         
                         const cost = (event.cost || 0).toFixed(2);
+                        const isCancelBy = event.type === 'cancel_by';
+                        const buttonClass = isCancelBy
+                            ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+                            : 'bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-gray-600';
+                        const safeCancelByLabel = cancelByLabel.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                        const eventTitle = isCancelBy
+                            ? `${safeCancelByLabel}: ${eventName} - ${currencySymbol}${cost}`
+                            : `${eventName} - ${currencySymbol}${cost}`;
+                        const eventLabel = isCancelBy ? `⏰ ${eventName}` : eventName;
                         content += `<button
                             hx-get="/form/subscription/${eventId}"
                             hx-target="#modal-content"
                             hx-swap="innerHTML"
                             hx-trigger="click"
-                            class="w-full text-left text-xs px-2 py-1 rounded bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-gray-600 transition-colors cursor-pointer flex items-center justify-between" 
-                            title="${eventName} - ${currencySymbol}${cost}"
+                            class="w-full text-left text-xs px-2 py-1 rounded ${buttonClass} transition-colors cursor-pointer flex items-center justify-between"
+                            title="${eventTitle}"
                             onclick="setTimeout(function() { document.getElementById('modal').classList.remove('hidden'); }, 50);">
                             <span class="flex items-center min-w-0 flex-1">
-                                ${iconHtml}<span class="truncate">${eventName}</span>
+                                ${iconHtml}<span class="truncate">${eventLabel}</span>
                             </span>
                             <span class="ml-2 flex-shrink-0 font-medium">${currencySymbol}${cost}</span>
                         </button>`;

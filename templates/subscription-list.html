@@ -191,6 +191,9 @@
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {{if .RenewalDate}}
                     {{fmtDate .RenewalDate $.GoDateFormat}}
+                    {{if and .CancelByDate (eq .Status "Active")}}
+                    <div data-cancel-by class="text-xs text-amber-700 dark:text-amber-300">{{t $.Lang "subscriptions.cancel_by"}} {{fmtDate .CancelByDate $.GoDateFormat}}</div>
+                    {{end}}
                     {{else}}
                     <span class="text-gray-400 dark:text-gray-500">—</span>
                     {{end}}

@@ -42,14 +42,14 @@ func (r *SubscriptionRepository) Create(subscription *models.Subscription) (*mod
 					INSERT INTO subscriptions (
 						name, label, cost, schedule, schedule_interval, share_count, status, category_id, category, original_currency,
 						payment_method, autopay, account, start_date, renewal_date,
-						cancellation_date, url, icon_url, notes, usage, reminder_enabled,
+						cancellation_date, cancellation_notice_days, url, icon_url, notes, usage, reminder_enabled,
 						date_calculation_version, created_at, updated_at
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					subscription.Name, subscription.Label, subscription.Cost, subscription.Schedule, subscription.ScheduleInterval, subscription.ShareCount,
 					subscription.Status, subscription.CategoryID, category.Name, subscription.OriginalCurrency,
 					subscription.PaymentMethod, subscription.Autopay, subscription.Account,
 					subscription.StartDate, subscription.RenewalDate,
-					subscription.CancellationDate, subscription.URL, subscription.IconURL,
+					subscription.CancellationDate, models.ClampCancellationNoticeDays(subscription.CancellationNoticeDays), subscription.URL, subscription.IconURL,
 					subscription.Notes, subscription.Usage, subscription.ReminderEnabled,
 					subscription.DateCalculationVersion,
 					time.Now(), time.Now())
@@ -172,6 +172,7 @@ func (r *SubscriptionRepository) Update(id uint, subscription *models.Subscripti
 	existing.LastCancellationReminderWindow = subscription.LastCancellationReminderWindow
 	existing.RenewalDate = subscription.RenewalDate
 	existing.CancellationDate = subscription.CancellationDate
+	existing.CancellationNoticeDays = subscription.CancellationNoticeDays
 	existing.URL = subscription.URL
 	existing.IconURL = subscription.IconURL
 	existing.Notes = subscription.Notes
@@ -200,6 +201,7 @@ func (r *SubscriptionRepository) Update(id uint, subscription *models.Subscripti
 				"start_date":                        existing.StartDate,
 				"renewal_date":                      existing.RenewalDate,
 				"cancellation_date":                 existing.CancellationDate,
+				"cancellation_notice_days":          models.ClampCancellationNoticeDays(existing.CancellationNoticeDays),
 				"url":                               existing.URL,
 				"icon_url":                          existing.IconURL,
 				"notes":                             existing.Notes,

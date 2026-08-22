@@ -70,6 +70,7 @@
   "subscriptions.search_placeholder": "Search subscriptions...",
   "subscriptions.search_no_matches": "No subscriptions match your search.",
   "subscriptions.autopay": "Autopay",
+  "subscriptions.cancel_by": "Cancel by",
   "subscriptions.manual_payment": "Manual",
   "subscriptions.payment_not_set": "Not set",
   "subscriptions.name": "Name",
@@ -123,6 +124,8 @@
   "form.start_date": "Start Date",
   "form.renewal_date": "Renewal Date",
   "form.cancellation_date": "Cancellation Date",
+  "form.cancellation_notice_days": "Cancellation Notice (days)",
+  "form.cancellation_notice_days_help": "Days before renewal you must cancel by. Renewal reminders will count down to this cancel-by deadline instead of the renewal date. 0 = no notice period.",
   "form.url": "URL",
   "form.icon_url": "Icon URL",
   "form.notes": "Notes",
@@ -260,6 +263,8 @@
   "settings.no_api_keys": "No API keys created yet",
 
   "calendar.title": "Calendar",
+
+  "calendar.cancel_by": "Cancellation deadline",
   "calendar.previous": "Previous month",
   "calendar.next": "Next month",
   "calendar.subscribe": "Subscribe to calendar",

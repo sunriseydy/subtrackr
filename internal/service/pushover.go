@@ -126,32 +126,9 @@ func (p *PushoverService) SendRenewalReminder(subscription *models.Subscription,
 		return nil // Silently skip if disabled
 	}
 
-	// Get currency symbol - use subscription's own currency if it differs from preferred
-	currencySymbol := currencySymbolForSubscription(subscription, p.settingsService)
-
-	// Build message
-	daysText := "days"
-	if daysUntilRenewal == 1 {
-		daysText = "day"
-	}
-	message := "🔔 Renewal Reminder\n\n"
-	message += fmt.Sprintf("Your subscription %s will renew in %d %s.\n\n", subscription.Name, daysUntilRenewal, daysText)
-	message += "Subscription Details:\n"
-	message += fmt.Sprintf("Cost: %s%.2f %s\n", currencySymbol, subscription.Cost, subscription.DisplaySchedule())
-	message += fmt.Sprintf("Monthly Cost: %s%.2f\n", currencySymbol, subscription.MonthlyCost())
-	if subscription.Category.Name != "" {
-		message += fmt.Sprintf("Category: %s\n", subscription.Category.Name)
-	}
-	if subscription.RenewalDate != nil {
-		message += fmt.Sprintf("Renewal Date: %s\n", subscription.RenewalDate.Format(p.settingsService.GetGoDateFormatLong()))
-	}
-	if subscription.URL != "" {
-		message += fmt.Sprintf("URL: %s", subscription.URL)
-	}
-
-	title := fmt.Sprintf("Renewal Reminder: %s", subscription.Name)
+	content := buildRenewalReminderContent(subscription, daysUntilRenewal, p.settingsService)
 	// Priority 0 = normal priority
-	return p.SendNotification(title, message, 0)
+	return p.SendNotification(content.Title, renewalReminderMessage(subscription, content, p.settingsService), 0)
 }
 
 // SendCancellationReminder sends a Pushover reminder for an upcoming subscription cancellation

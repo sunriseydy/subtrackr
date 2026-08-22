@@ -86,6 +86,8 @@ func main() {
 		StartDate        string  `json:"start_date" jsonschema:"start date in YYYY-MM-DD format"`
 		RenewalDate      string  `json:"renewal_date" jsonschema:"renewal date in YYYY-MM-DD format"`
 		CategoryID       uint    `json:"category_id" jsonschema:"category ID"`
+
+		CancellationNoticeDays int `json:"cancellation_notice_days" jsonschema:"days of cancellation notice the provider requires before renewal; renewal reminders count down to renewal date minus this; 0 = none"`
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_subscription",
@@ -103,6 +105,8 @@ func main() {
 			URL:              input.URL,
 			Notes:            input.Notes,
 			CategoryID:       input.CategoryID,
+
+			CancellationNoticeDays: models.ClampCancellationNoticeDays(input.CancellationNoticeDays),
 		}
 		if sub.Status == "" {
 			sub.Status = "Active"
@@ -143,6 +147,8 @@ func main() {
 		StartDate        string  `json:"start_date" jsonschema:"new start date in YYYY-MM-DD format"`
 		RenewalDate      string  `json:"renewal_date" jsonschema:"new renewal date in YYYY-MM-DD format"`
 		CategoryID       uint    `json:"category_id" jsonschema:"new category ID"`
+
+		CancellationNoticeDays int `json:"cancellation_notice_days" jsonschema:"new cancellation notice period in days; 0 clears it"`
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_subscription",
@@ -190,6 +196,16 @@ func main() {
 		}
 		if _, ok := provided["category_id"]; ok {
 			existing.CategoryID = input.CategoryID
+		}
+		if _, ok := provided["cancellation_notice_days"]; ok {
+			if clamped := models.ClampCancellationNoticeDays(input.CancellationNoticeDays); clamped != existing.CancellationNoticeDays {
+				existing.CancellationNoticeDays = clamped
+				// The reminder anchor moved: clear renewal-reminder dedup state so
+				// the windows for the new anchor can fire this cycle.
+				existing.LastReminderSent = nil
+				existing.LastReminderRenewalDate = nil
+				existing.LastReminderWindow = -1
+			}
 		}
 		if _, ok := provided["start_date"]; ok && input.StartDate != "" {
 			if t, err := time.Parse("2006-01-02", input.StartDate); err == nil {

@@ -70,6 +70,7 @@
   "subscriptions.search_placeholder": "Abonnements durchsuchen...",
   "subscriptions.search_no_matches": "Keine Abonnements entsprechen deiner Suche.",
   "subscriptions.autopay": "Automatisch",
+  "subscriptions.cancel_by": "Kündigen bis",
   "subscriptions.manual_payment": "Manuell",
   "subscriptions.payment_not_set": "Nicht festgelegt",
   "subscriptions.name": "Name",
@@ -123,6 +124,8 @@
   "form.start_date": "Startdatum",
   "form.renewal_date": "Verlängerungsdatum",
   "form.cancellation_date": "Kündigungsdatum",
+  "form.cancellation_notice_days": "Kündigungsfrist (Tage)",
+  "form.cancellation_notice_days_help": "Tage vor der Verlängerung, bis zu denen gekündigt werden muss. Erinnerungen richten sich nach diesem Stichtag statt nach dem Verlängerungsdatum. 0 = keine Frist.",
   "form.url": "URL",
   "form.icon_url": "Icon-URL",
   "form.notes": "Notizen",
@@ -260,6 +263,8 @@
   "settings.no_api_keys": "Noch keine API-Schlüssel erstellt",
 
   "calendar.title": "Kalender",
+
+  "calendar.cancel_by": "Kündigungsfrist",
   "calendar.previous": "Vorheriger Monat",
   "calendar.next": "Nächster Monat",
   "calendar.subscribe": "Kalender abonnieren",

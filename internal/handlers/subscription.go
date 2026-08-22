@@ -191,6 +191,17 @@ func parseShareCount(s string) int {
 	return v
 }
 
+func parseCancellationNoticeDays(s string) int {
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return models.ClampCancellationNoticeDays(v)
+}
+
 func lastPostedBool(c *gin.Context, name string) (bool, bool) {
 	values := c.PostFormArray(name)
 	if len(values) == 0 {
@@ -318,6 +329,7 @@ func (h *SubscriptionHandler) Calendar(c *gin.Context) {
 		Cost    float64 `json:"cost"`
 		ID      uint    `json:"id"`
 		IconURL string  `json:"icon_url"`
+		Type    string  `json:"type"`
 	}
 	eventsByDate := make(map[string][]Event)
 	for _, sub := range subscriptions {
@@ -328,7 +340,18 @@ func (h *SubscriptionHandler) Calendar(c *gin.Context) {
 				Cost:    sub.Cost,
 				ID:      sub.ID,
 				IconURL: sub.IconURL,
+				Type:    "renewal",
 			})
+			if cancelBy := sub.CancelByDate(); cancelBy != nil {
+				cancelKey := cancelBy.Format("2006-01-02")
+				eventsByDate[cancelKey] = append(eventsByDate[cancelKey], Event{
+					Name:    sub.Name,
+					Cost:    sub.Cost,
+					ID:      sub.ID,
+					IconURL: sub.IconURL,
+					Type:    "cancel_by",
+				})
+			}
 		}
 	}
 
@@ -470,6 +493,31 @@ func (h *SubscriptionHandler) generateICalContent(forSubscription bool) (string,
 			}
 
 			icalContent += "END:VEVENT\r\n"
+
+			// Companion event for the cancellation deadline, so external calendars
+			// show the last day to cancel and not just the renewal itself. No RRULE:
+			// the deadline is derived from the current renewal date each refresh.
+			if cancelBy := sub.CancelByDate(); cancelBy != nil {
+				cancelStart := cancelBy.Format("20060102T150000Z")
+				cancelEnd := cancelBy.Add(1 * time.Hour).Format("20060102T150000Z")
+				cancelUID := fmt.Sprintf("subtrackr-cancelby-%d-%d@subtrackr", sub.ID, cancelBy.Unix())
+
+				icalContent += "BEGIN:VEVENT\r\n"
+				icalContent += fmt.Sprintf("UID:%s\r\n", cancelUID)
+				icalContent += fmt.Sprintf("DTSTAMP:%s\r\n", dtStamp)
+				icalContent += fmt.Sprintf("DTSTART:%s\r\n", cancelStart)
+				icalContent += fmt.Sprintf("DTEND:%s\r\n", cancelEnd)
+				cancelDescription := fmt.Sprintf("Last day to cancel %s before it renews on %s (%d days notice required).",
+					sub.Name, sub.RenewalDate.Format("2006-01-02"), sub.CancellationNoticeDays)
+				if sub.URL != "" {
+					cancelDescription += fmt.Sprintf("\\nURL: %s", sub.URL)
+				}
+				icalContent += fmt.Sprintf("SUMMARY:Cancel %s by today\r\n", sub.Name)
+				icalContent += fmt.Sprintf("DESCRIPTION:%s\r\n", cancelDescription)
+				icalContent += "STATUS:CONFIRMED\r\n"
+				icalContent += "SEQUENCE:0\r\n"
+				icalContent += "END:VEVENT\r\n"
+			}
 		}
 	}
 
@@ -691,6 +739,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	subscription.StartDate = parseDatePtr(c.PostForm("start_date"))
 	subscription.RenewalDate = parseDatePtr(c.PostForm("renewal_date"))
 	subscription.CancellationDate = parseDatePtr(c.PostForm("cancellation_date"))
+	subscription.CancellationNoticeDays = parseCancellationNoticeDays(c.PostForm("cancellation_notice_days"))
 
 	// Fetch logo synchronously before creation if URL is provided and icon_url is empty
 	h.fetchAndSetLogo(&subscription)
@@ -903,6 +952,16 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	if val, ok := c.GetPostForm("cancellation_date"); ok {
 		existing.CancellationDate = parseDatePtr(val)
 	}
+	if val, ok := c.GetPostForm("cancellation_notice_days"); ok {
+		if parsed := parseCancellationNoticeDays(val); parsed != existing.CancellationNoticeDays {
+			existing.CancellationNoticeDays = parsed
+			// The reminder anchor moved: clear renewal-reminder dedup state so the
+			// windows for the new anchor can fire this cycle.
+			existing.LastReminderSent = nil
+			existing.LastReminderRenewalDate = nil
+			existing.LastReminderWindow = -1
+		}
+	}
 
 	// Fetch new logo if URL changed or URL is set but no icon
 	if urlChanged || (existing.URL != "" && existing.IconURL == "") {
@@ -1045,7 +1104,7 @@ func (h *SubscriptionHandler) ExportCSV(c *gin.Context) {
 	defer writer.Flush()
 
 	// Write CSV header
-	header := []string{"ID", "Name", "Category", "Cost", "Currency", "Schedule", "Schedule Interval", "Status", "Payment Method", "Autopay", "Account", "Start Date", "Renewal Date", "Cancellation Date", "URL", "Notes", "Usage", "Created At"}
+	header := []string{"ID", "Name", "Category", "Cost", "Currency", "Schedule", "Schedule Interval", "Status", "Payment Method", "Autopay", "Account", "Start Date", "Renewal Date", "Cancellation Date", "Cancellation Notice Days", "URL", "Notes", "Usage", "Created At"}
 	writer.Write(header)
 
 	// Write subscription data
@@ -1077,6 +1136,7 @@ func (h *SubscriptionHandler) ExportCSV(c *gin.Context) {
 			formatDate(sub.StartDate),
 			formatDate(sub.RenewalDate),
 			formatDate(sub.CancellationDate),
+			strconv.Itoa(sub.CancellationNoticeDays),
 			sub.URL,
 			sub.Notes,
 			sub.Usage,

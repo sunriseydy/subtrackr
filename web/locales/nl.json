@@ -70,6 +70,7 @@
   "subscriptions.search_placeholder": "Abonnementen zoeken...",
   "subscriptions.search_no_matches": "Geen abonnementen gevonden voor je zoekopdracht.",
   "subscriptions.autopay": "Automatisch",
+  "subscriptions.cancel_by": "Opzeggen vóór",
   "subscriptions.manual_payment": "Handmatig",
   "subscriptions.payment_not_set": "Niet ingesteld",
   "subscriptions.name": "Naam",
@@ -123,6 +124,8 @@
   "form.start_date": "Startdatum",
   "form.renewal_date": "Verlengingsdatum",
   "form.cancellation_date": "Opzegdatum",
+  "form.cancellation_notice_days": "Opzegtermijn (dagen)",
+  "form.cancellation_notice_days_help": "Aantal dagen vóór verlenging waarbinnen je moet opzeggen. Herinneringen tellen af naar deze uiterste opzegdatum in plaats van de verlengingsdatum. 0 = geen termijn.",
   "form.url": "URL",
   "form.icon_url": "Icoon-URL",
   "form.notes": "Notities",
@@ -260,6 +263,8 @@
   "settings.no_api_keys": "Nog geen API-sleutels aangemaakt",
 
   "calendar.title": "Agenda",
+
+  "calendar.cancel_by": "Uiterste opzegdatum",
   "calendar.previous": "Vorige maand",
   "calendar.next": "Volgende maand",
   "calendar.subscribe": "Abonneer op agenda",

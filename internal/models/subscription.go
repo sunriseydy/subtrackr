@@ -30,7 +30,8 @@ type Subscription struct {
 	Notes                          string     `json:"notes" gorm:""`
 	Usage                          string     `json:"usage" gorm:"" validate:"omitempty,oneof=High Medium Low None"`
 	ScheduleInterval               int        `json:"schedule_interval" gorm:"default:1"`
-	ShareCount                     int        `json:"share_count" gorm:"default:1"` // Number of people splitting this subscription; 1 means not shared
+	ShareCount                     int        `json:"share_count" gorm:"default:1"`              // Number of people splitting this subscription; 1 means not shared
+	CancellationNoticeDays         int        `json:"cancellation_notice_days" gorm:"default:0"` // Days before renewal the provider requires cancellation notice; 0 = none
 	ReminderEnabled                bool       `json:"reminder_enabled" gorm:"default:true"`
 	DateCalculationVersion         int        `json:"date_calculation_version" gorm:"default:1"`
 	LastReminderSent               *time.Time `json:"last_reminder_sent" gorm:""`              // Tracks when the last reminder was sent
@@ -51,6 +52,59 @@ func (s Subscription) HasAutopaySetting() bool {
 // AutopayEnabled reports whether the subscription is charged automatically.
 func (s Subscription) AutopayEnabled() bool {
 	return s.Autopay != nil && *s.Autopay
+}
+
+// HasCancellationNotice reports whether a cancellation notice period is set.
+func (s Subscription) HasCancellationNotice() bool {
+	return s.CancellationNoticeDays > 0
+}
+
+// CancelByDate returns the last day the subscription can be cancelled before it
+// renews (renewal date minus the notice period), or nil when there is no renewal
+// date or no notice period. It must be derived from the current RenewalDate on
+// every call because AfterFind auto-rolls past renewal dates forward.
+func (s Subscription) CancelByDate() *time.Time {
+	if s.RenewalDate == nil || s.CancellationNoticeDays <= 0 {
+		return nil
+	}
+	d := s.RenewalDate.AddDate(0, 0, -s.CancellationNoticeDays)
+	return &d
+}
+
+// UpcomingCancelByDate returns CancelByDate() only while the deadline has not
+// yet passed (one day of grace covers scheduler/sender timing skew). Once the
+// deadline is gone — including when the notice period equals or exceeds the
+// billing cycle, which would otherwise leave the anchor permanently in the
+// past — reminders fall back to the renewal date.
+func (s Subscription) UpcomingCancelByDate() *time.Time {
+	cancelBy := s.CancelByDate()
+	if cancelBy == nil || time.Since(*cancelBy) > 24*time.Hour {
+		return nil
+	}
+	return cancelBy
+}
+
+// ReminderAnchorDate returns the date renewal reminders are measured against:
+// the cancel-by date while that deadline is still upcoming, otherwise the
+// renewal date.
+func (s Subscription) ReminderAnchorDate() *time.Time {
+	if cancelBy := s.UpcomingCancelByDate(); cancelBy != nil {
+		return cancelBy
+	}
+	return s.RenewalDate
+}
+
+// ClampCancellationNoticeDays normalizes a notice period to the supported 0-365
+// range. All write paths (form, MCP, restore) must produce values in this range;
+// the model hooks apply it as a final guarantee.
+func ClampCancellationNoticeDays(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 365 {
+		return 365
+	}
+	return v
 }
 
 func (s *Subscription) effectiveInterval() int {
@@ -148,6 +202,7 @@ func (s *Subscription) IsHighCost(threshold float64) bool {
 
 // BeforeCreate hook to set renewal date for active subscriptions
 func (s *Subscription) BeforeCreate(tx *gorm.DB) error {
+	s.CancellationNoticeDays = ClampCancellationNoticeDays(s.CancellationNoticeDays)
 	if s.Status == "Active" && s.RenewalDate == nil {
 		// Set renewal date based on schedule
 		s.calculateNextRenewalDate()
@@ -179,6 +234,7 @@ func (s *Subscription) AfterFind(tx *gorm.DB) error {
 
 // BeforeUpdate hook to recalculate renewal date when schedule changes, start date changes, or date passes
 func (s *Subscription) BeforeUpdate(tx *gorm.DB) error {
+	s.CancellationNoticeDays = ClampCancellationNoticeDays(s.CancellationNoticeDays)
 	// Get the original values to check for schedule or start date changes
 	var original Subscription
 	if err := tx.Model(&Subscription{}).Where("id = ?", s.ID).First(&original).Error; err == nil {
