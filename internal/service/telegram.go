@@ -184,31 +184,8 @@ func (t *TelegramService) SendRenewalReminder(subscription *models.Subscription,
 		return nil // Silently skip if disabled
 	}
 
-	// Get currency symbol - use subscription's own currency if it differs from preferred
-	currencySymbol := currencySymbolForSubscription(subscription, t.settingsService)
-
-	// Build message
-	daysText := "days"
-	if daysUntilRenewal == 1 {
-		daysText = "day"
-	}
-	message := "🔔 Renewal Reminder\n\n"
-	message += fmt.Sprintf("Your subscription %s will renew in %d %s.\n\n", subscription.Name, daysUntilRenewal, daysText)
-	message += "Subscription Details:\n"
-	message += fmt.Sprintf("Cost: %s%.2f %s\n", currencySymbol, subscription.Cost, subscription.DisplaySchedule())
-	message += fmt.Sprintf("Monthly Cost: %s%.2f\n", currencySymbol, subscription.MonthlyCost())
-	if subscription.Category.Name != "" {
-		message += fmt.Sprintf("Category: %s\n", subscription.Category.Name)
-	}
-	if subscription.RenewalDate != nil {
-		message += fmt.Sprintf("Renewal Date: %s\n", subscription.RenewalDate.Format(t.settingsService.GetGoDateFormatLong()))
-	}
-	if subscription.URL != "" {
-		message += fmt.Sprintf("URL: %s", subscription.URL)
-	}
-
-	title := fmt.Sprintf("Renewal Reminder: %s", subscription.Name)
-	return t.SendNotification(title, message)
+	content := buildRenewalReminderContent(subscription, daysUntilRenewal, t.settingsService)
+	return t.SendNotification(content.Title, renewalReminderMessage(subscription, content, t.settingsService))
 }
 
 // SendCancellationReminder sends a Telegram reminder for an upcoming subscription cancellation.

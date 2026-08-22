@@ -32,17 +32,19 @@ type WebhookPayload struct {
 
 // WebhookSubscription is a simplified subscription for webhook payloads
 type WebhookSubscription struct {
-	ID               uint    `json:"id"`
-	Name             string  `json:"name"`
-	Cost             float64 `json:"cost"`
-	Currency         string  `json:"currency"`
-	CurrencySymbol   string  `json:"currency_symbol"`
-	Schedule         string  `json:"schedule"`
-	MonthlyCost      float64 `json:"monthly_cost"`
-	Category         string  `json:"category,omitempty"`
-	URL              string  `json:"url,omitempty"`
-	RenewalDate      string  `json:"renewal_date,omitempty"`
-	CancellationDate string  `json:"cancellation_date,omitempty"`
+	ID                     uint    `json:"id"`
+	Name                   string  `json:"name"`
+	Cost                   float64 `json:"cost"`
+	Currency               string  `json:"currency"`
+	CurrencySymbol         string  `json:"currency_symbol"`
+	Schedule               string  `json:"schedule"`
+	MonthlyCost            float64 `json:"monthly_cost"`
+	Category               string  `json:"category,omitempty"`
+	URL                    string  `json:"url,omitempty"`
+	RenewalDate            string  `json:"renewal_date,omitempty"`
+	CancellationDate       string  `json:"cancellation_date,omitempty"`
+	CancellationNoticeDays int     `json:"cancellation_notice_days,omitempty"`
+	CancelByDate           string  `json:"cancel_by_date,omitempty"`
 }
 
 func subscriptionToWebhook(sub *models.Subscription, settings *SettingsService) *WebhookSubscription {
@@ -68,6 +70,10 @@ func subscriptionToWebhook(sub *models.Subscription, settings *SettingsService) 
 	}
 	if sub.CancellationDate != nil {
 		ws.CancellationDate = sub.CancellationDate.Format(dateFormat)
+	}
+	ws.CancellationNoticeDays = sub.CancellationNoticeDays
+	if cancelBy := sub.CancelByDate(); cancelBy != nil {
+		ws.CancelByDate = cancelBy.Format(dateFormat)
 	}
 	return ws
 }
@@ -136,14 +142,14 @@ func (w *WebhookService) SendRenewalReminder(subscription *models.Subscription, 
 		return nil
 	}
 
-	daysText := "days"
-	if daysUntilRenewal == 1 {
-		daysText = "day"
-	}
+	content := buildRenewalReminderContent(subscription, daysUntilRenewal, w.settingsService)
 	payload := &WebhookPayload{
+		// The event name stays "renewal_reminder" even for cancel-by wording so
+		// existing consumers filtering on it keep receiving these reminders;
+		// they can distinguish via subscription.cancel_by_date in the payload.
 		Event:        "renewal_reminder",
-		Title:        fmt.Sprintf("Renewal Reminder: %s", subscription.Name),
-		Message:      fmt.Sprintf("Your subscription %s will renew in %d %s", subscription.Name, daysUntilRenewal, daysText),
+		Title:        content.Title,
+		Message:      content.Lead,
 		Subscription: subscriptionToWebhook(subscription, w.settingsService),
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 	}

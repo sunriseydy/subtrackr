@@ -41,15 +41,15 @@ func (r *SubscriptionRepository) Create(subscription *models.Subscription) (*mod
 				result := tx.Exec(`
 					INSERT INTO subscriptions (
 						name, label, cost, schedule, schedule_interval, share_count, status, category_id, category, original_currency,
-						payment_method, account, start_date, renewal_date,
-						cancellation_date, url, icon_url, notes, usage, reminder_enabled,
+						payment_method, autopay, account, start_date, renewal_date,
+						cancellation_date, cancellation_notice_days, url, icon_url, notes, usage, reminder_enabled,
 						date_calculation_version, created_at, updated_at
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					subscription.Name, subscription.Label, subscription.Cost, subscription.Schedule, subscription.ScheduleInterval, subscription.ShareCount,
 					subscription.Status, subscription.CategoryID, category.Name, subscription.OriginalCurrency,
-					subscription.PaymentMethod, subscription.Account,
+					subscription.PaymentMethod, subscription.Autopay, subscription.Account,
 					subscription.StartDate, subscription.RenewalDate,
-					subscription.CancellationDate, subscription.URL, subscription.IconURL,
+					subscription.CancellationDate, models.ClampCancellationNoticeDays(subscription.CancellationNoticeDays), subscription.URL, subscription.IconURL,
 					subscription.Notes, subscription.Usage, subscription.ReminderEnabled,
 					subscription.DateCalculationVersion,
 					time.Now(), time.Now())
@@ -161,6 +161,7 @@ func (r *SubscriptionRepository) Update(id uint, subscription *models.Subscripti
 	existing.CategoryID = subscription.CategoryID
 	existing.OriginalCurrency = subscription.OriginalCurrency
 	existing.PaymentMethod = subscription.PaymentMethod
+	existing.Autopay = subscription.Autopay
 	existing.Account = subscription.Account
 	existing.StartDate = subscription.StartDate
 	existing.LastReminderSent = subscription.LastReminderSent
@@ -171,6 +172,7 @@ func (r *SubscriptionRepository) Update(id uint, subscription *models.Subscripti
 	existing.LastCancellationReminderWindow = subscription.LastCancellationReminderWindow
 	existing.RenewalDate = subscription.RenewalDate
 	existing.CancellationDate = subscription.CancellationDate
+	existing.CancellationNoticeDays = subscription.CancellationNoticeDays
 	existing.URL = subscription.URL
 	existing.IconURL = subscription.IconURL
 	existing.Notes = subscription.Notes
@@ -183,33 +185,35 @@ func (r *SubscriptionRepository) Update(id uint, subscription *models.Subscripti
 		if err := r.db.First(&category, subscription.CategoryID).Error; err == nil {
 			// We need to manually set the category name for legacy schema
 			updates := map[string]interface{}{
-				"name":                       existing.Name,
-				"label":                      existing.Label,
-				"cost":                       existing.Cost,
-				"schedule":                   existing.Schedule,
-				"schedule_interval":          existing.ScheduleInterval,
-				"share_count":                existing.ShareCount,
-				"status":                     existing.Status,
-				"category_id":                existing.CategoryID,
-				"category":                   category.Name,
-				"original_currency":          existing.OriginalCurrency,
-				"payment_method":             existing.PaymentMethod,
-				"account":                    existing.Account,
-				"start_date":                 existing.StartDate,
-				"renewal_date":               existing.RenewalDate,
-				"cancellation_date":          existing.CancellationDate,
-				"url":                        existing.URL,
-				"icon_url":                   existing.IconURL,
-				"notes":                      existing.Notes,
-				"usage":                      existing.Usage,
-				"last_reminder_sent":                  existing.LastReminderSent,
-				"last_reminder_renewal_date":          existing.LastReminderRenewalDate,
-				"last_reminder_window":                existing.LastReminderWindow,
-				"reminder_enabled":                    existing.ReminderEnabled,
-				"last_cancellation_reminder_sent":     existing.LastCancellationReminderSent,
-				"last_cancellation_reminder_date":     existing.LastCancellationReminderDate,
-				"last_cancellation_reminder_window":   existing.LastCancellationReminderWindow,
-				"updated_at":                          time.Now(),
+				"name":                              existing.Name,
+				"label":                             existing.Label,
+				"cost":                              existing.Cost,
+				"schedule":                          existing.Schedule,
+				"schedule_interval":                 existing.ScheduleInterval,
+				"share_count":                       existing.ShareCount,
+				"status":                            existing.Status,
+				"category_id":                       existing.CategoryID,
+				"category":                          category.Name,
+				"original_currency":                 existing.OriginalCurrency,
+				"payment_method":                    existing.PaymentMethod,
+				"autopay":                           existing.Autopay,
+				"account":                           existing.Account,
+				"start_date":                        existing.StartDate,
+				"renewal_date":                      existing.RenewalDate,
+				"cancellation_date":                 existing.CancellationDate,
+				"cancellation_notice_days":          models.ClampCancellationNoticeDays(existing.CancellationNoticeDays),
+				"url":                               existing.URL,
+				"icon_url":                          existing.IconURL,
+				"notes":                             existing.Notes,
+				"usage":                             existing.Usage,
+				"last_reminder_sent":                existing.LastReminderSent,
+				"last_reminder_renewal_date":        existing.LastReminderRenewalDate,
+				"last_reminder_window":              existing.LastReminderWindow,
+				"reminder_enabled":                  existing.ReminderEnabled,
+				"last_cancellation_reminder_sent":   existing.LastCancellationReminderSent,
+				"last_cancellation_reminder_date":   existing.LastCancellationReminderDate,
+				"last_cancellation_reminder_window": existing.LastCancellationReminderWindow,
+				"updated_at":                        time.Now(),
 			}
 			if err := r.db.Model(&existing).Where("id = ?", id).Updates(updates).Error; err != nil {
 				return nil, err

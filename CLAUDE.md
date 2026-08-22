@@ -99,33 +99,37 @@ gh run watch <run-id> --exit-status
 # Merge when CI passes
 gh pr merge <pr-number> --merge --delete-branch
 
-# Switch to main
-git checkout main && git pull
+# Switch to main, fast-forward to the merge commit, and pin its SHA
+git checkout main
+git pull --ff-only
+RELEASE_SHA=$(git rev-parse HEAD)
 ```
 
 ### 9. Verify Docker Build on Main
 
-Every merge to main triggers the Docker build workflow, which pushes `:main` and `:sha-*` images. Do NOT publish the release until this build succeeds — it proves the release commit produces a working image.
+Every merge to main triggers the Docker build workflow, which pushes `:main` and `:sha-*` images. Do NOT publish the release until the build for `$RELEASE_SHA` succeeds — it proves the exact commit that will be tagged produces a working image.
 
 ```bash
-# Find and watch the build triggered by the merge to main
-gh run list --workflow=docker-publish.yml --branch main --limit 1
-gh run watch <run-id> --exit-status
+# Find and watch the build for the pinned release commit
+RUN_ID=$(gh run list --workflow=docker-publish.yml --commit "$RELEASE_SHA" --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run watch "$RUN_ID" --exit-status
 ```
 
 ### 10. Publish Release
 
-Only after the main-branch Docker build has succeeded:
+Only after the main-branch Docker build for `$RELEASE_SHA` has succeeded:
 
 ```bash
-# Publish the draft release
-gh release edit vX.Y.Z --draft=false
+# Publish the draft and create its tag at the verified commit, not moving main
+gh release edit vX.Y.Z --target "$RELEASE_SHA" --draft=false
 
-# Verify
+# Verify the published tag resolves to the verified commit
+git fetch --tags origin
+test "$(git rev-parse 'vX.Y.Z^{commit}')" = "$RELEASE_SHA"
 gh release view vX.Y.Z
 ```
 
-Publishing creates the version tag, which triggers a second Docker build that retags the already-verified commit with `:vX.Y.Z` and `:latest`.
+Publishing creates the version tag at `$RELEASE_SHA`, which triggers a second Docker build for the same source commit. It publishes the semver image tag without the leading `v` (for example, `:0.6.5`) and `:latest`.
 
 ## Beads Integration
 

@@ -285,7 +285,7 @@ func (e *EmailService) SendRenewalReminder(subscription *models.Subscription, da
 	<div class="container">
 		<h2>Subscription Renewal Reminder</h2>
 		<div class="reminder">
-			<strong>🔔 Reminder:</strong> Your subscription <strong>{{.Subscription.Name}}</strong> will renew in {{.DaysUntilRenewal}} {{if eq .DaysUntilRenewal 1}}day{{else}}days{{end}}.
+			{{if .FormattedCancelByDate}}<strong>🔔 Reminder:</strong> Cancel <strong>{{.Subscription.Name}}</strong> by {{.FormattedCancelByDate}} ({{.DaysUntilRenewal}} {{if eq .DaysUntilRenewal 1}}day{{else}}days{{end}} left) if you don't want it to renew{{if .FormattedRenewalDate}} on {{.FormattedRenewalDate}}{{end}}.{{else}}<strong>🔔 Reminder:</strong> Your subscription <strong>{{.Subscription.Name}}</strong> will renew in {{.DaysUntilRenewal}} {{if eq .DaysUntilRenewal 1}}day{{else}}days{{end}}.{{end}}
 		</div>
 		<div class="subscription-details">
 			<h3>Subscription Details</h3>
@@ -294,6 +294,7 @@ func (e *EmailService) SendRenewalReminder(subscription *models.Subscription, da
 			<div class="detail-row"><span class="label">Monthly Cost:</span> {{.CurrencySymbol}}{{printf "%.2f" (.Subscription.MonthlyCost)}}</div>
 			{{if and .Subscription.Category .Subscription.Category.Name}}<div class="detail-row"><span class="label">Category:</span> {{.Subscription.Category.Name}}</div>{{end}}
 			{{if .FormattedRenewalDate}}<div class="detail-row"><span class="label">Renewal Date:</span> {{.FormattedRenewalDate}}</div>{{end}}
+			{{if .FormattedCancelByDate}}<div class="detail-row"><span class="label">Cancel By:</span> {{.FormattedCancelByDate}}</div>{{end}}
 			{{if .Subscription.URL}}<div class="detail-row"><span class="label">URL:</span> <a href="{{.Subscription.URL}}">{{.Subscription.URL}}</a></div>{{end}}
 		</div>
 		<div class="footer">
@@ -306,22 +307,29 @@ func (e *EmailService) SendRenewalReminder(subscription *models.Subscription, da
 `
 
 	type ReminderData struct {
-		Subscription         *models.Subscription
-		DaysUntilRenewal     int
-		CurrencySymbol       string
-		FormattedRenewalDate string
+		Subscription          *models.Subscription
+		DaysUntilRenewal      int
+		CurrencySymbol        string
+		FormattedRenewalDate  string
+		FormattedCancelByDate string
 	}
 
 	var formattedRenewal string
 	if subscription.RenewalDate != nil {
 		formattedRenewal = subscription.RenewalDate.Format(e.settingsService.GetGoDateFormatLong())
 	}
+	cancelBy := subscription.UpcomingCancelByDate()
+	var formattedCancelBy string
+	if cancelBy != nil {
+		formattedCancelBy = cancelBy.Format(e.settingsService.GetGoDateFormatLong())
+	}
 
 	data := ReminderData{
-		Subscription:         subscription,
-		DaysUntilRenewal:     daysUntilRenewal,
-		CurrencySymbol:       currencySymbol,
-		FormattedRenewalDate: formattedRenewal,
+		Subscription:          subscription,
+		DaysUntilRenewal:      daysUntilRenewal,
+		CurrencySymbol:        currencySymbol,
+		FormattedRenewalDate:  formattedRenewal,
+		FormattedCancelByDate: formattedCancelBy,
 	}
 
 	t, err := template.New("renewalReminder").Parse(tmpl)
@@ -339,6 +347,9 @@ func (e *EmailService) SendRenewalReminder(subscription *models.Subscription, da
 		daysText = "day"
 	}
 	subject := fmt.Sprintf("Renewal Reminder: %s renews in %d %s", subscription.Name, daysUntilRenewal, daysText)
+	if cancelBy != nil {
+		subject = fmt.Sprintf("Cancellation Deadline: %s must be cancelled within %d %s", subscription.Name, daysUntilRenewal, daysText)
+	}
 	return e.SendEmail(subject, buf.String())
 }
 

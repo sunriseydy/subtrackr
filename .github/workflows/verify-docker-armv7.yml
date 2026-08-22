@@ -1,25 +1,30 @@
-name: Build and Publish Docker Image
+name: Verify Docker ARMv7
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches:
+      - feature/armv7-docker-build
+    paths:
+      - 'Dockerfile'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'templates/**'
+      - 'web/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/docker-publish.yml'
+      - '.github/workflows/verify-docker-armv7.yml'
   workflow_dispatch:
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  verify-armv7:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
@@ -30,24 +35,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
-            type=raw,value=main,enable={{is_default_branch}}
-            type=sha,enable={{is_default_branch}}
 
       - name: Extract version info
         id: version
@@ -61,17 +48,40 @@ jobs:
           echo "tag=$GIT_TAG" >> $GITHUB_OUTPUT
           echo "commit=$GIT_COMMIT" >> $GITHUB_OUTPUT
 
-      - name: Build and push Docker image
+      - name: Build ARMv7 image
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/arm/v7
+          load: true
+          tags: subtrackr:armv7-verify
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             GIT_TAG=${{ steps.version.outputs.tag }}
             GIT_COMMIT=${{ steps.version.outputs.commit }}
+
+      - name: Start ARMv7 container
+        run: docker run -d --rm --name subtrackr-armv7 -p 18080:8080 subtrackr:armv7-verify
+
+      - name: Wait for health endpoint
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18080/healthz > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Verify root endpoint
+        run: curl -fsS http://127.0.0.1:18080/ > /dev/null
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs subtrackr-armv7
+
+      - name: Stop ARMv7 container
+        if: always()
+        run: docker rm -f subtrackr-armv7 || true

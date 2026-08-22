@@ -231,6 +231,17 @@
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-colors duration-150">
             </div>
 
+            <!-- Cancellation Notice Period -->
+            <div>
+                <label for="cancellation_notice_days" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {{t .Lang "form.cancellation_notice_days"}}
+                </label>
+                <input type="number" id="cancellation_notice_days" name="cancellation_notice_days" min="0" max="365" step="1"
+                       value="{{if .Subscription}}{{.Subscription.CancellationNoticeDays}}{{else}}0{{end}}"
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-colors duration-150">
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{t .Lang "form.cancellation_notice_days_help"}}</p>
+            </div>
+
             <!-- Usage -->
             <div>
                 <label for="usage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{t .Lang "form.usage"}}</label>
@@ -250,6 +261,22 @@
                 <textarea id="notes" name="notes" rows="3"
                           placeholder="{{t .Lang "form.notes_placeholder"}}"
                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-colors duration-150">{{if .Subscription}}{{.Subscription.Notes}}{{end}}</textarea>
+            </div>
+
+            <!-- Autopay Toggle -->
+            <div class="md:col-span-2">
+                <label class="flex items-center space-x-3 cursor-pointer">
+                    <input type="hidden" id="autopay_known" name="autopay_known"
+                           value="{{if .IsEdit}}{{if .Subscription.HasAutopaySetting}}true{{else}}false{{end}}{{else}}true{{end}}">
+                    <input type="hidden" name="autopay" value="false">
+                    <input type="checkbox" id="autopay" name="autopay" value="true"
+                           {{if .Subscription}}{{if .Subscription.AutopayEnabled}}checked{{end}}{{end}}
+                           class="w-4 h-4 text-primary bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary focus:ring-2 transition-colors duration-150">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{t .Lang "form.autopay"}}</span>
+                </label>
+                <p id="autopay-help"
+                   data-help="{{t .Lang "form.autopay_help"}}"
+                   class="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-7">{{if .IsEdit}}{{if not .Subscription.HasAutopaySetting}}{{t .Lang "form.autopay_unknown_help"}}{{else}}{{t .Lang "form.autopay_help"}}{{end}}{{else}}{{t .Lang "form.autopay_help"}}{{end}}</p>
             </div>
 
             <!-- Reminder Toggle -->
@@ -352,6 +379,20 @@ async function createNewCategory() {
         if (addBtn) addBtn.disabled = false;
     }
 }
+
+(function initAutopayField() {
+    const checkbox = document.getElementById('autopay');
+    const knownInput = document.getElementById('autopay_known');
+    const help = document.getElementById('autopay-help');
+    if (!checkbox || !knownInput || knownInput.value !== 'false') return;
+
+    checkbox.indeterminate = true;
+    checkbox.addEventListener('change', function markAutopayKnown() {
+        knownInput.value = 'true';
+        checkbox.indeterminate = false;
+        if (help) help.textContent = help.dataset.help;
+    }, { once: true });
+})();
 
 // Allow Enter key to submit new category
 document.addEventListener('keydown', function(e) {

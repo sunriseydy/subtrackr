@@ -19,9 +19,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// newReminderTestRouter wires the minimal set of services needed to exercise
-// UpdateSubscription's reminder-toggle handling against an in-memory database.
-func newReminderTestRouter(t *testing.T) (*gin.Engine, *service.SubscriptionService) {
+// newSubscriptionUpdateTestRouter wires the minimal set of services needed to exercise
+// subscription form checkbox handling against an in-memory database.
+func newSubscriptionUpdateTestRouter(t *testing.T) (*gin.Engine, *service.SubscriptionService) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -88,7 +88,7 @@ func TestUpdateSubscription_ReminderToggle(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			router, svc := newReminderTestRouter(t)
+			router, svc := newSubscriptionUpdateTestRouter(t)
 
 			created, err := svc.Create(&models.Subscription{
 				Name:            "Netflix",
@@ -113,6 +113,80 @@ func TestUpdateSubscription_ReminderToggle(t *testing.T) {
 			updated, err := svc.GetByID(created.ID)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, updated.ReminderEnabled)
+		})
+	}
+}
+
+func testBoolPointer(value bool) *bool {
+	return &value
+}
+
+func TestUpdateSubscription_AutopayToggle(t *testing.T) {
+	tests := []struct {
+		name     string
+		formBody string
+		start    *bool
+		want     *bool
+	}{
+		{
+			name:     "unknown remains unknown when checkbox is untouched",
+			formBody: "autopay_known=false&autopay=false",
+			start:    nil,
+			want:     nil,
+		},
+		{
+			name:     "explicit false marks payment as manual",
+			formBody: "autopay_known=true&autopay=false",
+			start:    testBoolPointer(true),
+			want:     testBoolPointer(false),
+		},
+		{
+			name:     "checked value wins over hidden false",
+			formBody: "autopay_known=true&autopay=false&autopay=true",
+			start:    testBoolPointer(false),
+			want:     testBoolPointer(true),
+		},
+		{
+			name:     "absent field leaves value unchanged",
+			formBody: "name=Netflix",
+			start:    testBoolPointer(true),
+			want:     testBoolPointer(true),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			router, svc := newSubscriptionUpdateTestRouter(t)
+
+			created, err := svc.Create(&models.Subscription{
+				Name:            "Netflix",
+				Cost:            9.99,
+				Schedule:        "Monthly",
+				Status:          "Active",
+				ReminderEnabled: true,
+				Autopay:         tc.start,
+			})
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/subscriptions/"+strconv.FormatUint(uint64(created.ID), 10),
+				strings.NewReader(tc.formBody),
+			)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+			updated, err := svc.GetByID(created.ID)
+			require.NoError(t, err)
+			if tc.want == nil {
+				assert.Nil(t, updated.Autopay)
+			} else {
+				require.NotNil(t, updated.Autopay)
+				assert.Equal(t, *tc.want, *updated.Autopay)
+			}
 		})
 	}
 }

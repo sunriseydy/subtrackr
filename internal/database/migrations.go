@@ -25,9 +25,11 @@ func RunMigrations(db *gorm.DB) error {
 		migrateCancellationReminderTracking,
 		migrateScheduleInterval,
 		migrateReminderEnabled,
+		migrateAutopay,
 		migrateSubscriptionLabel,
 		migrateShareCount,
 		migrateReminderWindows,
+		migrateCancellationNoticeDays,
 	}
 
 	for _, migration := range migrations {
@@ -367,5 +369,41 @@ func migrateReminderEnabled(db *gorm.DB) error {
 	db.Exec("UPDATE subscriptions SET reminder_enabled = 1 WHERE reminder_enabled IS NULL")
 
 	log.Println("Migration completed: reminder_enabled field added")
+	return nil
+}
+
+// migrateAutopay adds nullable payment-mode tracking. Existing rows stay unknown.
+func migrateAutopay(db *gorm.DB) error {
+	var count int64
+	db.Raw("SELECT COUNT(*) FROM pragma_table_info('subscriptions') WHERE name = 'autopay'").Count(&count)
+
+	if count > 0 {
+		return nil
+	}
+
+	log.Println("Running migration: Adding nullable autopay field...")
+	if err := db.Exec("ALTER TABLE subscriptions ADD COLUMN autopay INTEGER").Error; err != nil {
+		log.Printf("Note: Could not add autopay column: %v", err)
+	}
+
+	return nil
+}
+
+// migrateCancellationNoticeDays adds the per-subscription cancellation notice
+// period. Existing rows default to 0 (no notice period), preserving behavior.
+func migrateCancellationNoticeDays(db *gorm.DB) error {
+	var count int64
+	db.Raw("SELECT COUNT(*) FROM pragma_table_info('subscriptions') WHERE name = 'cancellation_notice_days'").Count(&count)
+
+	if count > 0 {
+		return nil
+	}
+
+	log.Println("Running migration: Adding cancellation_notice_days field...")
+	if err := db.Exec("ALTER TABLE subscriptions ADD COLUMN cancellation_notice_days INTEGER DEFAULT 0").Error; err != nil {
+		log.Printf("Note: Could not add cancellation_notice_days column: %v", err)
+	}
+	db.Exec("UPDATE subscriptions SET cancellation_notice_days = 0 WHERE cancellation_notice_days IS NULL")
+
 	return nil
 }

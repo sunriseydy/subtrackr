@@ -69,7 +69,7 @@ Themes persist across all pages and are saved per user. Change themes anytime fr
 
 ## 🚀 Quick Start
 
-SubTrackr is available as a multi-platform Docker image supporting both AMD64 and ARM64 architectures (including Apple Silicon).
+SubTrackr is available as a multi-platform Docker image supporting AMD64, ARM64 (including Apple Silicon), and ARMv7 architectures.
 
 **Note:** SubTrackr works fully out-of-the-box with no external dependencies. The Fixer.io API key is completely optional for currency conversion features.
 
@@ -359,6 +359,10 @@ curl -H "X-API-Key: sk_your_api_key_here" https://your-domain.com/api/v1/subscri
 | GET | `/api/v1/subscriptions/:id` | Get subscription details |
 | PUT | `/api/v1/subscriptions/:id` | Update subscription |
 | DELETE | `/api/v1/subscriptions/:id` | Delete subscription |
+
+The `autopay` field is nullable: `true` means payments are automatic, `false` means manual payment is required, and `null` means the payment mode has not been recorded.
+
+The `cancellation_notice_days` field holds the notice period (in days, 0-365) the provider requires before renewal; `0` means none. When set, renewal reminders count down to the cancel-by deadline (`renewal_date` minus the notice period) instead of the renewal date; once the deadline has passed, reminders fall back to the renewal date. Webhook reminders keep the `renewal_reminder` event name and carry `cancel_by_date` and `cancellation_notice_days` in the subscription payload. Send the field form-encoded like the other subscription fields.
 
 #### Statistics & Export
 

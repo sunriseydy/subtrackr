@@ -161,9 +161,11 @@ func (s *SubscriptionService) GetAllCategories() ([]models.Category, error) {
 }
 
 // GetSubscriptionsNeedingReminders returns subscriptions that need renewal reminders.
-// `windows` is a list of "days before renewal" thresholds (e.g. [7,3,0]). A subscription
+// `windows` is a list of "days before" thresholds (e.g. [7,3,0]) measured against the
+// subscription's reminder anchor: the cancel-by date (renewal date minus the cancellation
+// notice period) when a notice period is set, otherwise the renewal date. A subscription
 // fires when daysUntil first crosses below the smallest matching window that hasn't yet
-// fired for the current renewal date. Returns a map of subscription to days until renewal.
+// fired for the current renewal date. Returns a map of subscription to days until the anchor.
 //
 // For backward compatibility, callers passing a single integer should wrap it in []int{n}.
 func (s *SubscriptionService) GetSubscriptionsNeedingReminders(windows []int) (map[*models.Subscription]int, error) {
@@ -178,7 +180,10 @@ func (s *SubscriptionService) GetSubscriptionsNeedingReminders(windows []int) (m
 		}
 	}
 
-	subscriptions, err := s.repo.GetUpcomingRenewals(maxWindow)
+	// Fetch all active subscriptions rather than only renewals inside the window:
+	// a cancellation notice period can pull the reminder anchor arbitrarily far
+	// ahead of the renewal date, so a renewal-date-bounded query would miss them.
+	subscriptions, err := s.repo.GetActiveSubscriptions()
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +192,12 @@ func (s *SubscriptionService) GetSubscriptionsNeedingReminders(windows []int) (m
 	sortedWindows := append([]int{}, windows...)
 	sort.Ints(sortedWindows)
 
+	// Anchors past this cutoff are outside the largest window. This preserves the
+	// boundary behavior of the old renewal_date BETWEEN now AND now+maxWindow SQL
+	// filter, which excluded dates a full maxWindow+epsilon away even though they
+	// truncate to maxWindow days.
+	cutoff := time.Now().AddDate(0, 0, maxWindow)
+
 	result := make(map[*models.Subscription]int)
 	for i := range subscriptions {
 		sub := &subscriptions[i]
@@ -194,8 +205,12 @@ func (s *SubscriptionService) GetSubscriptionsNeedingReminders(windows []int) (m
 			continue
 		}
 
-		daysUntil := int(time.Until(*sub.RenewalDate).Hours() / 24)
-		if daysUntil < 0 || daysUntil > maxWindow {
+		anchor := sub.ReminderAnchorDate()
+		if anchor.After(cutoff) {
+			continue
+		}
+		daysUntil := int(time.Until(*anchor).Hours() / 24)
+		if daysUntil < 0 {
 			continue
 		}
 
